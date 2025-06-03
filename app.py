@@ -1,24 +1,15 @@
-from flask import Flask, render_template, Response
 import cv2
-import face_recognition
-import numpy as np
-import os
+import mediapipe as mp
 import datetime
+from flask import Flask, render_template, Response
 
 app = Flask(__name__)
 
-# Carregar imagens conhecidas
-known_faces = []
-known_names = []
-path = "imagens_conhecidas/"
+# Inicializar o módulo de detecção facial do Mediapipe
+mp_face_detection = mp.solutions.face_detection
+face_detection = mp_face_detection.FaceDetection(min_detection_confidence=0.5)
 
-for file_name in os.listdir(path):
-    img = face_recognition.load_image_file(os.path.join(path, file_name))
-    encoding = face_recognition.face_encodings(img)[0]
-    known_faces.append(encoding)
-    known_names.append(os.path.splitext(file_name)[0])
-
-# Inicializar captura de vídeo
+# Captura de vídeo
 video_capture = cv2.VideoCapture(0)
 
 def generate_frames():
@@ -27,30 +18,24 @@ def generate_frames():
         if not ret:
             break
         
-        # Redimensionar para processamento
-        small_frame = cv2.resize(frame, (0, 0), fx=0.25, fy=0.25)
-        rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
-
+        # Converter para RGB (necessário para Mediapipe)
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        
         # Detectar rostos
-        face_locations = face_recognition.face_locations(rgb_small_frame)
-        face_encodings = face_recognition.face_encodings(rgb_small_frame, face_locations)
-
-        for encoding, location in zip(face_encodings, face_locations):
-            matches = face_recognition.compare_faces(known_faces, encoding)
-            name = "Desconhecido"
-
-            if True in matches:
-                first_match_index = matches.index(True)
-                name = known_names[first_match_index]
-
-            # Registrar presença
-            with open("presenca.csv", "a") as file:
-                file.write(f"{name}, {datetime.datetime.now()}\n")
-
-            # Desenhar identificação na imagem
-            top, right, bottom, left = location
-            cv2.rectangle(frame, (left*4, top*4), (right*4, bottom*4), (0, 255, 0), 2)
-            cv2.putText(frame, name, (left*4, top*4 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+        results = face_detection.process(rgb_frame)
+        
+        if results.detections:
+            for detection in results.detections:
+                bboxC = detection.location_data.relative_bounding_box
+                h, w, _ = frame.shape
+                x, y, w, h = int(bboxC.xmin * w), int(bboxC.ymin * h), int(bboxC.width * w), int(bboxC.height * h)
+                
+                # Desenhar um quadrado em torno do rosto
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                
+                # Registrar presença
+                with open("presenca.csv", "a") as file:
+                    file.write(f"Rosto detectado, {datetime.datetime.now()}\n")
 
         _, buffer = cv2.imencode('.jpg', frame)
         frame = buffer.tobytes()
@@ -66,8 +51,11 @@ def index():
 def video_feed():
     return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-
-
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))  # Obtém a porta do ambiente ou usa 5000 como padrão
+    import os
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
+
+
+
+
