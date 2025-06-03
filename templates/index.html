@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reconhecimento Facial</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Reconhecimento Facial</h1>
+        <img src="{{ url_for('video_feed') }}" id="video_feed">
+        <p id="status">Status: Aguardando...</p>
+        <button id="start">Iniciar</button>
+        <button id="stop">Parar</button>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
